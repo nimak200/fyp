@@ -1,5 +1,5 @@
 # Importing essential libraries
-from flask import flash, Flask, render_template, request, redirect, url_for
+from flask import flash, Flask, render_template, request, redirect, url_for, jsonify
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user
 from user import User  
 import pickle
@@ -10,10 +10,13 @@ import csv
 import subprocess
 import shutil
 import os
-from flask import Flask, render_template, request, jsonify
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from modules.chat import get_response
+
 
 from modules.calculate_bmi import calculate_bmi
 from modules.save_users_data_in_csv_file import save_to_csv
@@ -26,6 +29,8 @@ app.config['SECRET_KEY'] = 'd4d5e6f7g8h9j0k'
 
 # Set up Flask-Login
 login_manager = LoginManager(app)
+
+agreement_confirmed = False
 
 # Example: a dictionary to store user information
 users = {
@@ -62,7 +67,31 @@ def load_user(user_id):
 
 @app.route('/')
 def home():
-    return render_template('index.html')
+    global agreement_confirmed
+    if agreement_confirmed:
+        # If agreement is confirmed, render the dashboard
+        return render_template('index.html', agreement_confirmed=True)
+    else:
+        # If agreement is not confirmed, render the confirmation form
+        return render_template('index.html', agreement_confirmed=False)
+
+# Route to handle confirmation form submission
+@app.route('/confirm', methods=['POST'])
+def confirm():
+    global agreement_confirmed
+    if request.method == 'POST':
+        agreement = request.form.get('agreement')
+        if agreement == 'on':  # The checkbox is checked
+            agreement_confirmed = True
+            # Redirect to the home page (dashboard)
+            return redirect(url_for('home'))
+    # If agreement is not confirmed or method is not POST, stay on the home page
+    return redirect(url_for('home'))
+
+# Dashboard route (index.html)
+@app.route('/dashboard')
+def dashboard():
+    return render_template('index.html')  # Render the dashboard template
 
 @app.route('/predict_diabetes', methods=['POST'])
 def predict_diabetes():
@@ -98,6 +127,40 @@ def predict_diabetes():
         return render_template('result.html', prediction=prediction, model=model_used,
                                weight=weight, height=height, age=age,bmi=bmi,glucose=glucose,insulin=insulin)
 
+@app.route('/moreDetails', methods=['GET', 'POST'])
+def moreDetails():
+    return render_template('moreDetails.html')
+
+@app.route('/submit_contact_form', methods=['POST'])
+def submit_contact_form():
+    if request.method == 'POST':
+        name = request.form['name']
+        email = request.form['email']
+        message = request.form['message']
+
+        # Compose email
+        subject = 'Contact Form Submission'
+        body = f'Name: {name}\nEmail: {email}\nMessage: {message}'
+
+        # Send email
+        send_email(subject, body)
+
+        return 'Thank you for your message. We will get back to you soon.'
+
+    return 'Failed to submit contact form. Please try again.'
+
+def send_email(subject, body):
+    # Add your email configuration
+    EMAIL_ADDRESS = 'sumekasu2320@gmail.com'
+    EMAIL_ADDRESS2 = 'nimanthakasun2000@gmail.com'
+    EMAIL_PASSWORD = 'nn07235226d12nn'
+
+    msg = MIMEMultipart()
+    msg['From'] = EMAIL_ADDRESS
+    msg['To'] = EMAIL_ADDRESS2
+    msg['Subject'] = subject
+
+    msg.attach(MIMEText(body, 'plain'))
 
 # Admin login route
 @app.route('/admin/login', methods=['GET', 'POST'])
@@ -260,4 +323,4 @@ def predict():
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0')
+    app.run(debug=True)
